@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MotoLoop - Scenic Motorcycle Route Generator</title>
+  
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Generate custom motorcycle loops and scenic routes directly on your device.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MotoLoop">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff7ed',
+              500: '#f97316',
+              600: '#ea580c',
+              700: '#c2410c',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      touch-action: manipulation;
+    }
+    /* Hide scrollbars for slick UI */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Leaflet customization for dark theme */
+    .leaflet-container {
+      background: #0f172a !important;
+      font-family: 'Inter', sans-serif;
+    }
+    .leaflet-bar a {
+      background-color: #1e293b !important;
+      color: #f8fafc !important;
+      border-color: #334155 !important;
+    }
+    .leaflet-bar a:hover {
+      background-color: #334155 !important;
+    }
+    /* Pulsing Dot for user location */
+    .user-location-marker {
+      width: 16px;
+      height: 16px;
+      background-color: #3b82f6;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+      70% { box-shadow: 0 0 0 12px rgba(59, 130, 246, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+  </style>
+
+  <!-- Dynamic Web App Manifest inline -->
+  <script id="pwa-manifest" type="application/json">
+  {
+    "name": "MotoLoop Scenic Routes",
+    "short_name": "MotoLoop",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "icons": [
+      {
+        "src": "https://placehold.co/192x192/ea580c/ffffff?text=MOTO",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "https://placehold.co/512x512/ea580c/ffffff?text=MOTO",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ]
+  }
+  </script>
+  <script>
+    // Load manifest dynamically
+    const manifestBlob = new Blob([document.getElementById('pwa-manifest').textContent], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+  </script>
+</head>
+
+<body class="bg-slate-950 text-slate-100 h-screen w-screen overflow-hidden flex flex-col md:flex-row">
+
+  <!-- Mobile Drawer / Sidebar Controls -->
+  <aside id="sidebar" class="w-full md:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 h-auto md:h-full max-h-[50vh] md:max-h-full transition-all duration-300 shadow-2xl">
+    
+    <!-- Header -->
+    <header class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 backdrop-blur sticky top-0 z-10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+          <i class="fa-solid font-bold fa-motorcycle text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight tracking-wide text-white">MotoLoop</h1>
+          <p class="text-xs text-slate-400">Scenic Motorcycle Route Planner</p>
+        </div>
+      </div>
+      <button id="pwa-install-btn" class="hidden text-xs bg-slate-800 hover:bg-slate-700 text-brand-500 border border-brand-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-download"></i> Install App
+      </button>
+    </header>
+
+    <!-- Scrollable Controls Container -->
+    <div class="p-4 overflow-y-auto space-y-5 flex-1 no-scrollbar">
+
+      <!-- Start Location Inputs -->
+      <div class="space-y-2">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-location-dot text-brand-500"></i> Start Location
+        </label>
+        
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <input type="text" id="address-input" placeholder="Search address or city..." 
+              class="w-full bg-slate-800 text-slate-100 placeholder-slate-500 text-sm rounded-xl pl-9 pr-3 py-2.5 border border-slate-700 focus:outline-none focus:border-brand-500 transition">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3.5 text-xs text-slate-400"></i>
+          </div>
+          <button id="search-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2.5 rounded-xl border border-slate-700 transition">
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+
+        <button id="locate-btn" class="w-full bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs py-2 rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-crosshairs text-brand-500"></i> Use My Current Location
+        </button>
+      </div>
+
+      <!-- Distance Selector Slider -->
+      <div class="space-y-2 bg-slate-800/40 p-3.5 rounded-2xl border border-slate-800">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Target Distance</label>
+          <div class="flex items-center gap-2">
+            <span id="distance-val" class="text-lg font-bold text-brand-500">45</span>
+            <span id="unit-label" class="text-xs font-medium text-slate-400">miles</span>
+            <button id="unit-toggle" class="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-mono hover:bg-slate-600 ml-1">
+              MI / KM
+            </button>
+          </div>
+        </div>
+        <input type="range" id="distance-slider" min="15" max="250" value="45" step="5"
+          class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+        <div class="flex justify-between text-[10px] text-slate-500">
+          <span>Short (15)</span>
+          <span>Medium (100)</span>
+          <span>Long (250)</span>
+        </div>
+      </div>
+
+      <!-- Heading & Direction Preference -->
+      <div class="space-y-2">
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Heading Direction</label>
+        <div class="grid grid-cols-5 gap-1.5 text-center">
+          <button data-dir="any" class="dir-btn active bg-brand-600 text-white text-xs py-2 rounded-xl border border-brand-500 font-medium transition">Any</button>
+          <button data-dir="N" class="dir-btn bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-xl border border-slate-700 font-medium transition">North</button>
+          <button data-dir="E" class="dir-btn bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-xl border border-slate-700 font-medium transition">East</button>
+          <button data-dir="S" class="dir-btn bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-xl border border-slate-700 font-medium transition">South</button>
+          <button data-dir="W" class="dir-btn bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded-xl border border-slate-700 font-medium transition">West</button>
+        </div>
+      </div>
+
+      <!-- Loop Variants & Action Button -->
+      <div class="space-y-3 pt-1">
+        <div class="flex justify-between items-center text-xs text-slate-400">
+          <span>Loop Options:</span>
+          <div class="flex gap-2">
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="variants" value="1" class="accent-brand-500"> 1 Option
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="variants" value="3" checked class="accent-brand-500"> 3 Options
+            </label>
+          </div>
+        </div>
+
+        <button id="generate-btn" class="w-full bg-gradient-to-r from-brand-600 to-amber-600 hover:from-brand-500 hover:to-amber-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2 transition active:scale-[0.98]">
+          <i class="fa-solid fa-route"></i> Generate Scenic Loops
+        </button>
+      </div>
+
+      <!-- Route Summaries & Options Card List -->
+      <div id="route-results" class="space-y-2.5 pt-2 hidden">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex justify-between items-center">
+          <span>Generated Routes</span>
+          <span class="text-[10px] text-brand-500 font-normal">Select a route to inspect</span>
+        </h3>
+        
+        <div id="route-cards-container" class="space-y-2">
+          <!-- Dynamically populated route cards -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer Actions (GPX Export) -->
+    <div id="export-footer" class="p-4 border-t border-slate-800 bg-slate-900/95 flex gap-2 hidden">
+      <button id="export-gpx-btn" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-brand-500 font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-file-export"></i> Export Selected Route (.GPX)
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- Interactive Map Canvas -->
+  <main class="flex-1 h-full w-full relative">
+    <div id="map" class="h-full w-full"></div>
+
+    <!-- Map Floating Overlay Controls -->
+    <div class="absolute top-4 right-4 z-[400] flex flex-col gap-2">
+      <button id="recenter-btn" title="Center Map on Start" class="w-10 h-10 bg-slate-900/90 text-slate-200 rounded-xl border border-slate-700 shadow-xl flex items-center justify-center hover:bg-slate-800 transition">
+        <i class="fa-solid fa-location-crosshairs"></i>
+      </button>
+    </div>
+
+    <!-- Status Banner / Toast Message -->
+    <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] bg-slate-900/90 backdrop-blur border border-slate-700 text-slate-100 text-xs px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 opacity-0 transition-opacity pointer-events-none">
+      <i id="toast-icon" class="fa-solid fa-info-circle text-brand-500"></i>
+      <span id="toast-message">Tap map to pick start point</span>
+    </div>
+  </main>
+
+  <script>
+    // App State Management
+    const state = {
+      unit: 'mi', // 'mi' or 'km'
+      startPos: { lat: 39.7392, lng: -104.9903 }, // Default to Denver, CO
+      targetDistance: 45,
+      direction: 'any',
+      variantsCount: 3,
+      routes: [],
+      selectedRouteIndex: 0,
+      userPos: null
+    };
+
+    // UI Elements
+    const mapEl = document.getElementById('map');
+    const distanceSlider = document.getElementById('distance-slider');
+    const distanceVal = document.getElementById('distance-val');
+    const unitLabel = document.getElementById('unit-label');
+    const unitToggle = document.getElementById('unit-toggle');
+    const addressInput = document.getElementById('address-input');
+    const searchBtn = document.getElementById('search-btn');
+    const locateBtn = document.getElementById('locate-btn');
+    const generateBtn = document.getElementById('generate-btn');
+    const recenterBtn = document.getElementById('recenter-btn');
+    const routeResults = document.getElementById('route-results');
+    const routeCardsContainer = document.getElementById('route-cards-container');
+    const exportFooter = document.getElementById('export-footer');
+    const exportGpxBtn = document.getElementById('export-gpx-btn');
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+    const toastIcon = document.getElementById('toast-icon');
+    const pwaInstallBtn = document.getElementById('pwa-install-btn');
+
+    let map, startMarker, userMarker;
+    let polylineGroup = L.layerGroup();
+
+    // Map Route Colors for multiple options
+    const ROUTE_COLORS = ['#f97316', '#3b82f6', '#10b981'];
+
+    // Initialize Map on Load
+    window.addEventListener('load', () => {
+      initMap();
+      setupEventListeners();
+      checkPWA();
+    });
+
+    function initMap() {
+      // Initialize Leaflet Map centered on default location
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([state.startPos.lat, state.startPos.lng], 10);
+
+      // Add Zoom Control at top right
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // Use CartoDB Dark Matter tile layer for slick dark UI
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(map);
+
+      // Layer for polylines
+      polylineGroup.addTo(map);
+
+      // Custom Start Pin Marker Icon
+      const startIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background-color: #ea580c; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); flex items-center justify-center;"><i class="fa-solid fa-flag-checkered text-[10px] text-white flex justify-center items-center h-full"></i></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      startMarker = L.marker([state.startPos.lat, state.startPos.lng], { icon: startIcon, draggable: true }).addTo(map);
+
+      // Handle map drag on pin
+      startMarker.on('dragend', (e) => {
+        const coords = e.target.getLatLng();
+        setStartLocation(coords.lat, coords.lng, "Selected Pin");
+      });
+
+      // Handle Map Click to set location
+      map.on('click', (e) => {
+        setStartLocation(e.latlng.lat, e.latlng.lng, "Selected Location");
+      });
+
+      showToast("Tap anywhere on the map to set starting point", "fa-map-pin");
+    }
+
+    function setupEventListeners() {
+      // Slider Input
+      distanceSlider.addEventListener('input', (e) => {
+        state.targetDistance = parseInt(e.target.value);
+        distanceVal.textContent = state.targetDistance;
+      });
+
+      // Unit Toggle (Miles / KM)
+      unitToggle.addEventListener('click', () => {
+        if (state.unit === 'mi') {
+          state.unit = 'km';
+          unitLabel.textContent = 'km';
+          state.targetDistance = Math.round(state.targetDistance * 1.60934);
+        } else {
+          state.unit = 'mi';
+          unitLabel.textContent = 'miles';
+          state.targetDistance = Math.round(state.targetDistance / 1.60934);
+        }
+        distanceSlider.value = state.targetDistance;
+        distanceVal.textContent = state.targetDistance;
+      });
+
+      // Direction Button Selection
+      document.querySelectorAll('.dir-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.dir-btn').forEach(b => {
+            b.classList.remove('active', 'bg-brand-600', 'text-white', 'border-brand-500');
+            b.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+          });
+          const target = e.currentTarget;
+          target.classList.add('active', 'bg-brand-600', 'text-white', 'border-brand-500');
+          target.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
+          state.direction = target.dataset.dir;
+        });
+      });
+
+      // Radio Button Variants
+      document.querySelectorAll('input[name="variants"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          state.variantsCount = parseInt(e.target.value);
+        });
+      });
+
+      // Address Search
+      searchBtn.addEventListener('click', handleSearch);
+      addressInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSearch();
+      });
+
+      // Locate User Button
+      locateBtn.addEventListener('click', locateUser);
+
+      // Recenter Map
+      recenterBtn.addEventListener('click', () => {
+        map.flyTo([state.startPos.lat, state.startPos.lng], 11);
+      });
+
+      // Generate Route Event
+      generateBtn.addEventListener('click', generateLoops);
+
+      // Export GPX
+      exportGpxBtn.addEventListener('click', exportSelectedRouteGPX);
+    }
+
+    // Set Start Location
+    function setStartLocation(lat, lng, label) {
+      state.startPos = { lat, lng };
+      startMarker.setLatLng([lat, lng]);
+      showToast(`Start location updated`, "fa-location-dot");
+    }
+
+    // Geolocation API
+    function locateUser() {
+      if (!navigator.geolocation) {
+        showToast("Geolocation is not supported by your browser", "fa-triangle-exclamation");
+        return;
+      }
+
+      showToast("Fetching location...", "fa-spinner fa-spin");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          state.userPos = { lat, lng };
+
+          if (!userMarker) {
+            const userIcon = L.divIcon({
+              className: 'user-location-marker',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8]
+            });
+            userMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+          } else {
+            userMarker.setLatLng([lat, lng]);
+          }
+
+          setStartLocation(lat, lng, "Current Location");
+          map.flyTo([lat, lng], 11);
+        },
+        (err) => {
+          showToast("Unable to retrieve location", "fa-triangle-exclamation");
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+
+    // Nominatim Address Search
+    async function handleSearch() {
+      const query = addressInput.value.trim();
+      if (!query) return;
+
+      showToast("Searching location...", "fa-spinner fa-spin");
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (data && data.length > 0) {
+          const { lat, lon, display_name } = data[0];
+          setStartLocation(parseFloat(lat), parseFloat(lon), display_name);
+          map.flyTo([lat, lon], 11);
+        } else {
+          showToast("Location not found", "fa-triangle-exclamation");
+        }
+      } catch (e) {
+        showToast("Search failed. Check network.", "fa-triangle-exclamation");
+      }
+    }
+
+    // Core Loop Generation Logic
+    async function generateLoops() {
+      generateBtn.disabled = true;
+      generateBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Calculating Twisty Loops...`;
+      showToast("Calculating curvy road loops...", "fa-route");
+
+      polylineGroup.clearLayers();
+      state.routes = [];
+      routeCardsContainer.innerHTML = '';
+      routeResults.classList.add('hidden');
+      exportFooter.classList.add('hidden');
+
+      const count = state.variantsCount;
+      const targetKm = state.unit === 'mi' ? state.targetDistance * 1.60934 : state.targetDistance;
+
+      let fetchedRoutes = [];
+
+      for (let i = 0; i < count; i++) {
+        try {
+          // Calculate waypoints in circle
+          const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i);
+          
+          // Format waypoints for OSRM API call
+          const coordString = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+          
+          // Request OSRM route
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
+          const response = await fetch(osrmUrl);
+          
+          if (!response.ok) continue;
+
+          const data = await response.json();
+          if (data.routes && data.routes.length > 0) {
+            const r = data.routes[0];
+            const distanceMiles = (r.distance / 1609.34).toFixed(1);
+            const distanceKm = (r.distance / 1000).toFixed(1);
+            const durationMins = Math.round(r.duration / 60);
+            
+            fetchedRoutes.push({
+              index: i,
+              coordinates: r.geometry.coordinates, // [lng, lat]
+              distanceMiles,
+              distanceKm,
+              durationMins,
+              color: ROUTE_COLORS[i % ROUTE_COLORS.length]
+            });
+          }
+        } catch (err) {
+          console.error("OSRM Route fetch failed:", err);
+        }
+      }
+
+      generateBtn.disabled = false;
+      generateBtn.innerHTML = `<i class="fa-solid fa-route"></i> Generate Scenic Loops`;
+
+      if (fetchedRoutes.length === 0) {
+        showToast("Could not compute valid loops. Try adjusting distance.", "fa-triangle-exclamation");
+        return;
+      }
+
+      state.routes = fetchedRoutes;
+      renderRouteOptions();
+      selectRoute(0);
+      showToast(`Generated ${fetchedRoutes.length} loop options`, "fa-circle-check");
+    }
+
+    // Helper: Generate circular waypoint coordinates around origin
+    function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset) {
+      // Radius approximation: circumference = 2 * pi * r => r = target / (2 * pi)
+      // We scale radius down slightly because actual roads zigzag, increasing total distance
+      const radiusKm = (totalTargetKm / (2 * Math.PI)) * 0.75;
+      
+      // Conversion approx: 1 degree lat ~ 111 km, 1 degree lng ~ 111 * cos(lat) km
+      const latKmRatio = 111.0;
+      const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
+
+      // Determine Base Heading Angle
+      let baseAngle = 0; // East
+      if (headingDir === 'N') baseAngle = Math.PI / 2;
+      else if (headingDir === 'E') baseAngle = 0;
+      else if (headingDir === 'S') baseAngle = (3 * Math.PI) / 2;
+      else if (headingDir === 'W') baseAngle = Math.PI;
+      else baseAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.5); // Any / Random spread
+
+      // Add rotation jitter based on variant offset
+      baseAngle += (variantOffset * 0.6);
+
+      const waypoints = [];
+      // Start point
+      waypoints.push({ lat, lng });
+
+      // Generate 3 circular perimeter waypoints to form a loop
+      const numPoints = 3;
+      for (let i = 0; i < numPoints; i++) {
+        const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / (numPoints + 1)));
+        
+        // Add subtle randomized distance distortion for organic shape
+        const distJitter = radiusKm * (0.85 + (Math.random() * 0.3));
+        
+        const wpLat = lat + (distJitter * Math.sin(stepAngle) / latKmRatio);
+        const wpLng = lng + (distJitter * Math.cos(stepAngle) / lngKmRatio);
+        
+        waypoints.push({ lat: wpLat, lng: wpLng });
+      }
+
+      // Close the loop back at origin
+      waypoints.push({ lat, lng });
+
+      return waypoints;
+    }
+
+    // Render generated routes list in UI
+    function renderRouteOptions() {
+      routeCardsContainer.innerHTML = '';
+      routeResults.classList.remove('hidden');
+      exportFooter.classList.remove('hidden');
+
+      state.routes.forEach((route, idx) => {
+        const displayDist = state.unit === 'mi' ? `${route.distanceMiles} mi` : `${route.distanceKm} km`;
+        const hours = Math.floor(route.durationMins / 60);
+        const mins = route.durationMins % 60;
+        const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins} mins`;
+
+        const card = document.createElement('div');
+        card.className = `route-card p-3 rounded-xl border border-slate-700/80 bg-slate-800/50 hover:bg-slate-800 cursor-pointer flex items-center justify-between transition ${idx === 0 ? 'ring-2 ring-brand-500 bg-slate-800' : ''}`;
+        card.dataset.index = idx;
+
+        card.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-3 h-10 rounded-full" style="background-color: ${route.color}"></div>
+            <div>
+              <div class="font-bold text-sm text-slate-100">Option ${idx + 1}</div>
+              <div class="text-xs text-slate-400">${timeStr} ride time</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-base font-bold text-brand-500">${displayDist}</span>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-500 ml-2"></i>
+          </div>
+        `;
+
+        card.addEventListener('click', () => selectRoute(idx));
+        routeCardsContainer.appendChild(card);
+      });
+    }
+
+    // Select and highlight route on map
+    function selectRoute(index) {
+      state.selectedRouteIndex = index;
+      polylineGroup.clearLayers();
+
+      // Update card visual state
+      document.querySelectorAll('.route-card').forEach((c, idx) => {
+        if (idx === index) {
+          c.classList.add('ring-2', 'ring-brand-500', 'bg-slate-800');
+        } else {
+          c.classList.remove('ring-2', 'ring-brand-500', 'bg-slate-800');
+        }
+      });
+
+      // Render layers (draw selected route last so it sits on top)
+      const bounds = L.latLngBounds();
+
+      state.routes.forEach((route, idx) => {
+        const latLngs = route.coordinates.map(c => [c[1], c[0]]);
+        const isSelected = idx === index;
+
+        const polyline = L.polyline(latLngs, {
+          color: route.color,
+          weight: isSelected ? 6 : 3,
+          opacity: isSelected ? 0.9 : 0.4,
+          dashArray: isSelected ? null : '6, 8'
+        });
+
+        polylineGroup.addLayer(polyline);
+
+        if (isSelected) {
+          latLngs.forEach(ll => bounds.extend(ll));
+        }
+      });
+
+      // Zoom map to fit selected route
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
+    }
+
+    // Export selected route as standard GPX file
+    function exportSelectedRouteGPX() {
+      const route = state.routes[state.selectedRouteIndex];
+      if (!route) return;
+
+      const displayDist = state.unit === 'mi' ? `${route.distanceMiles}mi` : `${route.distanceKm}km`;
+      const gpxContent = buildGPXXML(route, `MotoLoop_${displayDist}`);
+
+      // Create download blob
+      const blob = new Blob([gpxContent], { type: 'application/gpx+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MotoLoop_Option${state.selectedRouteIndex + 1}_${displayDist}.gpx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast("GPX file downloaded successfully!", "fa-circle-down");
+    }
+
+    // Construct valid GPX XML structure
+    function buildGPXXML(route, trackName) {
+      let trkpts = route.coordinates.map(c => `      <trkpt lat="${c[1]}" lon="${c[0]}"></trkpt>`).join('\n');
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="MotoLoop PWA" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>${trackName}</name>
+    <desc>Scenic Motorcycle Loop generated by MotoLoop PWA</desc>
+  </metadata>
+  <trk>
+    <name>${trackName}</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+    }
+
+    // Utility: Toast messages
+    let toastTimeout;
+    function showToast(message, iconClass = "fa-info-circle") {
+      toastMessage.textContent = message;
+      toastIcon.className = `fa-solid ${iconClass} text-brand-500`;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 3500);
+    }
+
+    // Service Worker & PWA Install Prompt Handler
+    let deferredPrompt;
+    function checkPWA() {
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        pwaInstallBtn.classList.remove('hidden');
+      });
+
+      pwaInstallBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          pwaInstallBtn.classList.add('hidden');
+        }
+        deferredPrompt = null;
+      });
+
+      // Register inline basic Service Worker for offline PWA shell support
+      if ('serviceWorker' in navigator) {
+        const swCode = `
+          self.addEventListener('install', (e) => self.skipWaiting());
+          self.addEventListener('activate', (e) => self.clients.claim());
+          self.addEventListener('fetch', (e) => {
+            // Network first fetch strategy
+            e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+          });
+        `;
+        const blob = new Blob([swCode], { type: 'text/javascript' });
+        navigator.serviceWorker.register(URL.createObjectURL(blob))
+          .catch(err => console.log('SW reg error:', err));
+      }
+    }
+  </script>
+</body>
+</html>
