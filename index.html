@@ -422,13 +422,14 @@
     }
 
     // Geolocation API
-    function locateUser() {
+        function locateUser() {
       if (!navigator.geolocation) {
-        showToast("Geolocation is not supported by your browser", "fa-triangle-exclamation");
+        showToast("Geolocation not supported by this browser", "fa-triangle-exclamation");
         return;
       }
 
-      showToast("Fetching location...", "fa-spinner fa-spin");
+      showToast("Acquiring GPS fix...", "fa-spinner fa-spin");
+      
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude: lat, longitude: lng } = pos.coords;
@@ -444,6 +445,24 @@
           } else {
             userMarker.setLatLng([lat, lng]);
           }
+
+          setStartLocation(lat, lng, "Current Location");
+          map.flyTo([lat, lng], 13);
+          showToast("Location locked!", "fa-circle-check");
+        },
+        (err) => {
+          console.error("Geolocation error code:", err.code, err.message);
+          let msg = "Location unavailable. Check device GPS settings.";
+          if (err.code === 1) {
+            msg = "Location permission denied. Enable in browser settings.";
+          } else if (err.code === 3) {
+            msg = "GPS timed out. Try moving near a window or outdoors.";
+          }
+          showToast(msg, "fa-triangle-exclamation");
+        },
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
+      );
+    }
 
           setStartLocation(lat, lng, "Current Location");
           map.flyTo([lat, lng], 11);
