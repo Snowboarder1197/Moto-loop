@@ -482,7 +482,7 @@
       }
     }
 
-    async function generateLoops() {
+async function generateLoops() {
       generateBtn.disabled = true;
       generateBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Calculating Twisty Loops...`;
       showToast("Calculating curvy road loops...", "fa-route");
@@ -500,9 +500,22 @@
 
       for (let i = 0; i < count; i++) {
         try {
-          const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i, state.twistiness);
+          const { waypoints, bearings } = generateCircleWaypoints(
+            state.startPos.lat, 
+            state.startPos.lng, 
+            targetKm, 
+            state.direction, 
+            i, 
+            state.twistiness
+          );
+
           const coordString = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
+          const bearingString = bearings.join(';');
+
+          // Radiuses: allow 2000m snapping flex per waypoint to force open-road routing rather than narrow residential streets
+          const radiusString = waypoints.map(() => '2000').join(';');
+
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson&bearings=${bearingString}&radiuses=${radiusString}`;
           const response = await fetch(osrmUrl);
           
           if (!response.ok) continue;
@@ -543,41 +556,51 @@
     }
 
     function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset, twistiness = 2) {
-      const radiusKm = Math.max(8, (totalTargetKm / (2 * Math.PI)) * 0.85);
+      // Calculate radius based on circuit perimeter
+      const radiusKm = Math.max(10, (totalTargetKm / (2 * Math.PI)) * 0.9);
       const latKmRatio = 111.0;
       const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
 
-      let baseAngle = 0;
-      if (headingDir === 'N') baseAngle = Math.PI / 2;
-      else if (headingDir === 'E') baseAngle = 0;
-      else if (headingDir === 'S') baseAngle = (3 * Math.PI) / 2;
-      else if (headingDir === 'W') baseAngle = Math.PI;
-      else baseAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.5);
+      let startAngle = 0;
+      if (headingDir === 'N') startAngle = Math.PI / 2;
+      else if (headingDir === 'E') startAngle = 0;
+      else if (headingDir === 'S') startAngle = (3 * Math.PI) / 2;
+      else if (headingDir === 'W') startAngle = Math.PI;
+      else startAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.4);
 
-      baseAngle += (variantOffset * 0.7);
+      startAngle += (variantOffset * 0.5);
+
+      // Node count scales with twistiness (4 nodes for balanced, 6 for max twist)
+      const numNodes = twistiness === 3 ? 6 : 4;
+      const angleStep = (2 * Math.PI) / numNodes;
 
       const waypoints = [];
+      const bearings = [];
 
-      const initialPushDist = Math.min(radiusKm * 0.45, 15);
-      const pushLat = lat + (initialPushDist * Math.sin(baseAngle) / latKmRatio);
-      const pushLng = lng + (initialPushDist * Math.cos(baseAngle) / lngKmRatio);
-      waypoints.push({ lat: pushLat, lng: pushLng });
+      for (let i = 0; i < numNodes; i++) {
+        const currentAngle = startAngle + (i * angleStep);
+        
+        // Jitter distance slightly to prevent rigid geometric shapes while keeping points moving forward
+        const jitter = 0.85 + (Math.random() * 0.3);
+        const dist = radiusKm * jitter;
 
-      const numPoints = twistiness === 3 ? 5 : 3;
-      
-      for (let i = 0; i < numPoints; i++) {
-        const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / numPoints));
-        const jitterFactor = twistiness === 1 ? 0.98 : twistiness === 2 ? (0.85 + Math.random() * 0.3) : (0.7 + Math.random() * 0.5);
-        const distJitter = radiusKm * jitterFactor;
-        
-        const wpLat = lat + (distJitter * Math.sin(stepAngle) / latKmRatio);
-        const wpLng = lng + (distJitter * Math.cos(stepAngle) / lngKmRatio);
-        
+        const wpLat = lat + (dist * Math.sin(currentAngle) / latKmRatio);
+        const wpLng = lng + (dist * Math.cos(currentAngle) / lngKmRatio);
+
         waypoints.push({ lat: wpLat, lng: wpLng });
+
+        // Calculate travel heading (in degrees 0-360) perpendicular to origin vector to enforce forward momentum
+        let headingDeg = Math.round((90 - (currentAngle * 180 / Math.PI) + 360) % 360);
+        // OSRM format: "value,range" (heading angle with a +/- 45 degree directional window)
+        bearings.push(`${headingDeg},45`);
       }
 
+      // Close loop at origin
       waypoints.push({ lat, lng });
-      return waypoints;
+      // Final leg heading back to origin without restriction
+      bearings.push('');
+
+      return { waypoints, bearings };
     }
 
     function renderRouteOptions() {
