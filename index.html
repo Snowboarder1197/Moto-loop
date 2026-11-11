@@ -422,7 +422,7 @@
     }
 
     // Geolocation API
-        function locateUser() {
+            function locateUser() {
       if (!navigator.geolocation) {
         showToast("Geolocation not supported by this browser", "fa-triangle-exclamation");
         return;
@@ -463,17 +463,7 @@
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
       );
     }
-
-          setStartLocation(lat, lng, "Current Location");
-          map.flyTo([lat, lng], 11);
-        },
-        (err) => {
-          showToast("Unable to retrieve location", "fa-triangle-exclamation");
-        },
-        { enableHighAccuracy: true }
-      );
-    }
-
+    
     // Nominatim Address Search
     async function handleSearch() {
       const query = addressInput.value.trim();
