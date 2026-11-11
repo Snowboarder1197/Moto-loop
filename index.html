@@ -49,7 +49,6 @@
       font-family: 'Inter', sans-serif;
       touch-action: manipulation;
     }
-    /* Hide scrollbars for slick UI */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
@@ -57,7 +56,6 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
-    /* Leaflet customization for dark theme */
     .leaflet-container {
       background: #0f172a !important;
       font-family: 'Inter', sans-serif;
@@ -70,7 +68,6 @@
     .leaflet-bar a:hover {
       background-color: #334155 !important;
     }
-    /* Pulsing Dot for user location */
     .user-location-marker {
       width: 16px;
       height: 16px;
@@ -111,7 +108,6 @@
   }
   </script>
   <script>
-    // Load manifest dynamically
     const manifestBlob = new Blob([document.getElementById('pwa-manifest').textContent], {type: 'application/json'});
     const manifestURL = URL.createObjectURL(manifestBlob);
     const link = document.createElement('link');
@@ -278,8 +274,8 @@
   <script>
     // App State Management
     const state = {
-      unit: 'mi', // 'mi' or 'km'
-      startPos: { lat: 39.7392, lng: -104.9903 }, // Default to Denver, CO
+      unit: 'mi',
+      startPos: { lat: 39.7392, lng: -104.9903 },
       twistiness: 2,
       targetDistance: 45,
       direction: 'any',
@@ -314,10 +310,8 @@
     let map, startMarker, userMarker;
     let polylineGroup = L.layerGroup();
 
-    // Map Route Colors for multiple options
     const ROUTE_COLORS = ['#f97316', '#3b82f6', '#10b981'];
 
-    // Initialize Map on Load
     window.addEventListener('load', () => {
       initMap();
       setupEventListeners();
@@ -325,26 +319,20 @@
     });
 
     function initMap() {
-      // Initialize Leaflet Map centered on default location
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([state.startPos.lat, state.startPos.lng], 10);
 
-      // Add Zoom Control at top right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Use CartoDB Dark Matter tile layer for slick dark 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-     }).addTo(map);
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
 
-
-      // Layer for polylines
       polylineGroup.addTo(map);
 
-      // Custom Start Pin Marker Icon
       const startIcon = L.divIcon({
         className: 'custom-div-icon',
         html: `<div style="background-color: #ea580c; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); flex items-center justify-center;"><i class="fa-solid fa-flag-checkered text-[10px] text-white flex justify-center items-center h-full"></i></div>`,
@@ -354,13 +342,11 @@
 
       startMarker = L.marker([state.startPos.lat, state.startPos.lng], { icon: startIcon, draggable: true }).addTo(map);
 
-      // Handle map drag on pin
       startMarker.on('dragend', (e) => {
         const coords = e.target.getLatLng();
         setStartLocation(coords.lat, coords.lng, "Selected Pin");
       });
 
-      // Handle Map Click to set location
       map.on('click', (e) => {
         setStartLocation(e.latlng.lat, e.latlng.lng, "Selected Location");
       });
@@ -369,21 +355,17 @@
     }
 
     function setupEventListeners() {
-      // Slider Input
       distanceSlider.addEventListener('input', (e) => {
         state.targetDistance = parseInt(e.target.value);
         distanceVal.textContent = state.targetDistance;
       });
-      const twistSlider = document.getElementById('twist-slider');
-      const twistVal = document.getElementById('twist-val');
 
       twistSlider.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
-     state.twistiness = val;
-    twistVal.textContent = val === 1 ? 'Direct' : val === 2 ? 'Balanced' : 'Max Twist';
-    }); 
+        const val = parseInt(e.target.value);
+        state.twistiness = val;
+        twistVal.textContent = val === 1 ? 'Direct' : val === 2 ? 'Balanced' : 'Max Twist';
+      });
 
-      // Unit Toggle (Miles / KM)
       unitToggle.addEventListener('click', () => {
         if (state.unit === 'mi') {
           state.unit = 'km';
@@ -398,7 +380,6 @@
         distanceVal.textContent = state.targetDistance;
       });
 
-      // Direction Button Selection
       document.querySelectorAll('.dir-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           document.querySelectorAll('.dir-btn').forEach(b => {
@@ -412,43 +393,33 @@
         });
       });
 
-      // Radio Button Variants
       document.querySelectorAll('input[name="variants"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
           state.variantsCount = parseInt(e.target.value);
         });
       });
 
-      // Address Search
       searchBtn.addEventListener('click', handleSearch);
       addressInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleSearch();
       });
 
-      // Locate User Button
       locateBtn.addEventListener('click', locateUser);
-
-      // Recenter Map
       recenterBtn.addEventListener('click', () => {
         map.flyTo([state.startPos.lat, state.startPos.lng], 11);
       });
 
-      // Generate Route Event
       generateBtn.addEventListener('click', generateLoops);
-
-      // Export GPX
       exportGpxBtn.addEventListener('click', exportSelectedRouteGPX);
     }
 
-    // Set Start Location
     function setStartLocation(lat, lng, label) {
       state.startPos = { lat, lng };
       startMarker.setLatLng([lat, lng]);
       showToast(`Start location updated`, "fa-location-dot");
     }
 
-    // Geolocation API
-            function locateUser() {
+    function locateUser() {
       if (!navigator.geolocation) {
         showToast("Geolocation not supported by this browser", "fa-triangle-exclamation");
         return;
@@ -489,8 +460,7 @@
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
       );
     }
-    
-    // Nominatim Address Search
+
     async function handleSearch() {
       const query = addressInput.value.trim();
       if (!query) return;
@@ -512,7 +482,6 @@
       }
     }
 
-    // Core Loop Generation Logic
     async function generateLoops() {
       generateBtn.disabled = true;
       generateBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Calculating Twisty Loops...`;
@@ -526,19 +495,13 @@
 
       const count = state.variantsCount;
       const targetKm = state.unit === 'mi' ? state.targetDistance * 1.60934 : state.targetDistance;
-      const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i, state.twistiness);
 
       let fetchedRoutes = [];
 
       for (let i = 0; i < count; i++) {
         try {
-          // Calculate waypoints in circle
-          const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i);
-          
-          // Format waypoints for OSRM API call
+          const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i, state.twistiness);
           const coordString = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-          
-          // Request OSRM route
           const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
           const response = await fetch(osrmUrl);
           
@@ -553,7 +516,7 @@
             
             fetchedRoutes.push({
               index: i,
-              coordinates: r.geometry.coordinates, // [lng, lat]
+              coordinates: r.geometry.coordinates,
               distanceMiles,
               distanceKm,
               durationMins,
@@ -579,7 +542,6 @@
       showToast(`Generated ${fetchedRoutes.length} loop options`, "fa-circle-check");
     }
 
-// Helper: Generate circular waypoint coordinates designed to avoid backtracking and urban sprawl
     function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset, twistiness = 2) {
       const radiusKm = Math.max(8, (totalTargetKm / (2 * Math.PI)) * 0.85);
       const latKmRatio = 111.0;
@@ -596,19 +558,15 @@
 
       const waypoints = [];
 
-      // Initial outward push to clear local neighborhoods
       const initialPushDist = Math.min(radiusKm * 0.45, 15);
       const pushLat = lat + (initialPushDist * Math.sin(baseAngle) / latKmRatio);
       const pushLng = lng + (initialPushDist * Math.cos(baseAngle) / lngKmRatio);
       waypoints.push({ lat: pushLat, lng: pushLng });
 
-      // Number of primary perimeter nodes (increases if max twist is selected)
       const numPoints = twistiness === 3 ? 5 : 3;
       
       for (let i = 0; i < numPoints; i++) {
         const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / numPoints));
-        
-        // Add aggressive jitter based on twistiness level to force backroad routing
         const jitterFactor = twistiness === 1 ? 0.98 : twistiness === 2 ? (0.85 + Math.random() * 0.3) : (0.7 + Math.random() * 0.5);
         const distJitter = radiusKm * jitterFactor;
         
@@ -622,52 +580,6 @@
       return waypoints;
     }
 
-      // 3. Return cleanly back to origin
-      waypoints.push({ lat, lng });
-
-      return waypoints;
-    }
-      
-      // Conversion approx: 1 degree lat ~ 111 km, 1 degree lng ~ 111 * cos(lat) km
-      const latKmRatio = 111.0;
-      const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
-
-      // Determine Base Heading Angle
-      let baseAngle = 0; // East
-      if (headingDir === 'N') baseAngle = Math.PI / 2;
-      else if (headingDir === 'E') baseAngle = 0;
-      else if (headingDir === 'S') baseAngle = (3 * Math.PI) / 2;
-      else if (headingDir === 'W') baseAngle = Math.PI;
-      else baseAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.5); // Any / Random spread
-
-      // Add rotation jitter based on variant offset
-      baseAngle += (variantOffset * 0.6);
-
-      const waypoints = [];
-      // Start point
-      waypoints.push({ lat, lng });
-
-      // Generate 3 circular perimeter waypoints to form a loop
-      const numPoints = 3;
-      for (let i = 0; i < numPoints; i++) {
-        const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / (numPoints + 1)));
-        
-        // Add subtle randomized distance distortion for organic shape
-        const distJitter = radiusKm * (0.85 + (Math.random() * 0.3));
-        
-        const wpLat = lat + (distJitter * Math.sin(stepAngle) / latKmRatio);
-        const wpLng = lng + (distJitter * Math.cos(stepAngle) / lngKmRatio);
-        
-        waypoints.push({ lat: wpLat, lng: wpLng });
-      }
-
-      // Close the loop back at origin
-      waypoints.push({ lat, lng });
-
-      return waypoints;
-    }
-
-    // Render generated routes list in UI
     function renderRouteOptions() {
       routeCardsContainer.innerHTML = '';
       routeResults.classList.remove('hidden');
@@ -702,12 +614,10 @@
       });
     }
 
-    // Select and highlight route on map
     function selectRoute(index) {
       state.selectedRouteIndex = index;
       polylineGroup.clearLayers();
 
-      // Update card visual state
       document.querySelectorAll('.route-card').forEach((c, idx) => {
         if (idx === index) {
           c.classList.add('ring-2', 'ring-brand-500', 'bg-slate-800');
@@ -716,7 +626,6 @@
         }
       });
 
-      // Render layers (draw selected route last so it sits on top)
       const bounds = L.latLngBounds();
 
       state.routes.forEach((route, idx) => {
@@ -737,13 +646,11 @@
         }
       });
 
-      // Zoom map to fit selected route
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [40, 40] });
       }
     }
 
-    // Export selected route as standard GPX file
     function exportSelectedRouteGPX() {
       const route = state.routes[state.selectedRouteIndex];
       if (!route) return;
@@ -751,7 +658,6 @@
       const displayDist = state.unit === 'mi' ? `${route.distanceMiles}mi` : `${route.distanceKm}km`;
       const gpxContent = buildGPXXML(route, `MotoLoop_${displayDist}`);
 
-      // Create download blob
       const blob = new Blob([gpxContent], { type: 'application/gpx+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -765,7 +671,6 @@
       showToast("GPX file downloaded successfully!", "fa-circle-down");
     }
 
-    // Construct valid GPX XML structure
     function buildGPXXML(route, trackName) {
       let trkpts = route.coordinates.map(c => `      <trkpt lat="${c[1]}" lon="${c[0]}"></trkpt>`).join('\n');
 
@@ -784,7 +689,6 @@ ${trkpts}
 </gpx>`;
     }
 
-    // Utility: Toast messages
     let toastTimeout;
     function showToast(message, iconClass = "fa-info-circle") {
       toastMessage.textContent = message;
@@ -797,7 +701,6 @@ ${trkpts}
       }, 3500);
     }
 
-    // Service Worker & PWA Install Prompt Handler
     let deferredPrompt;
     function checkPWA() {
       window.addEventListener('beforeinstallprompt', (e) => {
@@ -816,13 +719,11 @@ ${trkpts}
         deferredPrompt = null;
       });
 
-      // Register inline basic Service Worker for offline PWA shell support
       if ('serviceWorker' in navigator) {
         const swCode = `
           self.addEventListener('install', (e) => self.skipWaiting());
           self.addEventListener('activate', (e) => self.clients.claim());
           self.addEventListener('fetch', (e) => {
-            // Network first fetch strategy
             e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
           });
         `;
@@ -834,6 +735,3 @@ ${trkpts}
   </script>
 </body>
 </html>
-
-757 lines 
-651 loc
