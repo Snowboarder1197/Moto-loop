@@ -500,7 +500,8 @@ async function generateLoops() {
 
       for (let i = 0; i < count; i++) {
         try {
-          const { waypoints, bearings } = generateCircleWaypoints(
+          // Pass the variant index i so each of the 3 options points in a different direction
+          const waypoints = generateCircleWaypoints(
             state.startPos.lat, 
             state.startPos.lng, 
             targetKm, 
@@ -510,12 +511,11 @@ async function generateLoops() {
           );
 
           const coordString = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-          const bearingString = bearings.join(';');
+          
+          // Use generous radiuses (5000m) so OSRM snaps smoothly to secondary roads without failing
+          const radiusString = waypoints.map(() => '5000').join(';');
 
-          // Radiuses: allow 2000m snapping flex per waypoint to force open-road routing rather than narrow residential streets
-          const radiusString = waypoints.map(() => '2000').join(';');
-
-          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson&bearings=${bearingString}&radiuses=${radiusString}`;
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson&radiuses=${radiusString}`;
           const response = await fetch(osrmUrl);
           
           if (!response.ok) continue;
@@ -556,8 +556,8 @@ async function generateLoops() {
     }
 
     function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset, twistiness = 2) {
-      // Calculate radius based on circuit perimeter
-      const radiusKm = Math.max(10, (totalTargetKm / (2 * Math.PI)) * 0.9);
+      // Scale radius for target distance
+      const radiusKm = Math.max(8, (totalTargetKm / (2 * Math.PI)) * 0.85);
       const latKmRatio = 111.0;
       const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
 
@@ -566,41 +566,38 @@ async function generateLoops() {
       else if (headingDir === 'E') startAngle = 0;
       else if (headingDir === 'S') startAngle = (3 * Math.PI) / 2;
       else if (headingDir === 'W') startAngle = Math.PI;
-      else startAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.4);
+      else startAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.5);
 
-      startAngle += (variantOffset * 0.5);
+      // Offset each variant angle so option 1, 2, and 3 point in distinct directions
+      startAngle += (variantOffset * (Math.PI / 1.5));
 
-      // Node count scales with twistiness (4 nodes for balanced, 6 for max twist)
+      const waypoints = [];
+
+      // 1. Immediate outward push to clear local neighborhood streets
+      const initialPushDist = Math.min(radiusKm * 0.4, 12);
+      const pushLat = lat + (initialPushDist * Math.sin(startAngle) / latKmRatio);
+      const pushLng = lng + (initialPushDist * Math.cos(startAngle) / lngKmRatio);
+      waypoints.push({ lat: pushLat, lng: pushLng });
+
+      // 2. Multi-node loop polygon (4 to 6 nodes depending on twistiness)
       const numNodes = twistiness === 3 ? 6 : 4;
       const angleStep = (2 * Math.PI) / numNodes;
 
-      const waypoints = [];
-      const bearings = [];
-
       for (let i = 0; i < numNodes; i++) {
-        const currentAngle = startAngle + (i * angleStep);
-        
-        // Jitter distance slightly to prevent rigid geometric shapes while keeping points moving forward
-        const jitter = 0.85 + (Math.random() * 0.3);
+        const nodeAngle = startAngle + (i * angleStep);
+        const jitter = twistiness === 1 ? 0.95 : (0.8 + (Math.random() * 0.4));
         const dist = radiusKm * jitter;
 
-        const wpLat = lat + (dist * Math.sin(currentAngle) / latKmRatio);
-        const wpLng = lng + (dist * Math.cos(currentAngle) / lngKmRatio);
+        const wpLat = lat + (dist * Math.sin(nodeAngle) / latKmRatio);
+        const wpLng = lng + (dist * Math.cos(nodeAngle) / lngKmRatio);
 
         waypoints.push({ lat: wpLat, lng: wpLng });
-
-        // Calculate travel heading (in degrees 0-360) perpendicular to origin vector to enforce forward momentum
-        let headingDeg = Math.round((90 - (currentAngle * 180 / Math.PI) + 360) % 360);
-        // OSRM format: "value,range" (heading angle with a +/- 45 degree directional window)
-        bearings.push(`${headingDeg},45`);
       }
 
-      // Close loop at origin
+      // 3. Clean closure back to start point
       waypoints.push({ lat, lng });
-      // Final leg heading back to origin without restriction
-      bearings.push('');
 
-      return { waypoints, bearings };
+      return waypoints;
     }
 
     function renderRouteOptions() {
