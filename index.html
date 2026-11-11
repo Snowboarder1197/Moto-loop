@@ -188,6 +188,21 @@
         </div>
       </div>
 
+      <!-- Twistiness Preference Slider -->
+      <div class="space-y-2 bg-slate-800/40 p-3.5 rounded-2xl border border-slate-800">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Twistiness (Curviness)</label>
+          <span id="twist-val" class="text-sm font-bold text-brand-500">Balanced</span>
+        </div>
+        <input type="range" id="twist-slider" min="1" max="3" value="2" step="1"
+          class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+        <div class="flex justify-between text-[10px] text-slate-500">
+          <span>Direct</span>
+          <span>Balanced</span>
+          <span>Max Twist</span>
+        </div>
+      </div>
+
       <!-- Heading & Direction Preference -->
       <div class="space-y-2">
         <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Heading Direction</label>
@@ -265,6 +280,7 @@
     const state = {
       unit: 'mi', // 'mi' or 'km'
       startPos: { lat: 39.7392, lng: -104.9903 }, // Default to Denver, CO
+      twistiness: 2,
       targetDistance: 45,
       direction: 'any',
       variantsCount: 3,
@@ -292,6 +308,8 @@
     const toastMessage = document.getElementById('toast-message');
     const toastIcon = document.getElementById('toast-icon');
     const pwaInstallBtn = document.getElementById('pwa-install-btn');
+    const twistSlider = document.getElementById('twist-slider');
+    const twistVal = document.getElementById('twist-val');
 
     let map, startMarker, userMarker;
     let polylineGroup = L.layerGroup();
@@ -356,6 +374,14 @@
         state.targetDistance = parseInt(e.target.value);
         distanceVal.textContent = state.targetDistance;
       });
+      const twistSlider = document.getElementById('twist-slider');
+      const twistVal = document.getElementById('twist-val');
+
+      twistSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+     state.twistiness = val;
+    twistVal.textContent = val === 1 ? 'Direct' : val === 2 ? 'Balanced' : 'Max Twist';
+    }); 
 
       // Unit Toggle (Miles / KM)
       unitToggle.addEventListener('click', () => {
@@ -500,6 +526,7 @@
 
       const count = state.variantsCount;
       const targetKm = state.unit === 'mi' ? state.targetDistance * 1.60934 : state.targetDistance;
+      const waypoints = generateCircleWaypoints(state.startPos.lat, state.startPos.lng, targetKm, state.direction, i, state.twistiness);
 
       let fetchedRoutes = [];
 
@@ -553,10 +580,8 @@
     }
 
 // Helper: Generate circular waypoint coordinates designed to avoid backtracking and urban sprawl
-    function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset) {
-      // Expand radius slightly and ensure a minimum size to stay out of tight neighborhoods
+    function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset, twistiness = 2) {
       const radiusKm = Math.max(8, (totalTargetKm / (2 * Math.PI)) * 0.85);
-      
       const latKmRatio = 111.0;
       const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
 
@@ -571,24 +596,31 @@
 
       const waypoints = [];
 
-      // 1. Initial outward push waypoint to clear local neighborhood/suburban congestion immediately
+      // Initial outward push to clear local neighborhoods
       const initialPushDist = Math.min(radiusKm * 0.45, 15);
       const pushLat = lat + (initialPushDist * Math.sin(baseAngle) / latKmRatio);
       const pushLng = lng + (initialPushDist * Math.cos(baseAngle) / lngKmRatio);
       waypoints.push({ lat: pushLat, lng: pushLng });
 
-      // 2. Generate 3 wide loop perimeter waypoints to form a sweeping, non-overlapping circuit
-      const numPoints = 3;
+      // Number of primary perimeter nodes (increases if max twist is selected)
+      const numPoints = twistiness === 3 ? 5 : 3;
+      
       for (let i = 0; i < numPoints; i++) {
-        // Offset angles to ensure wide separation and prevent overlapping return paths
         const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / numPoints));
-        const distJitter = radiusKm * (0.95 + (Math.random() * 0.15));
+        
+        // Add aggressive jitter based on twistiness level to force backroad routing
+        const jitterFactor = twistiness === 1 ? 0.98 : twistiness === 2 ? (0.85 + Math.random() * 0.3) : (0.7 + Math.random() * 0.5);
+        const distJitter = radiusKm * jitterFactor;
         
         const wpLat = lat + (distJitter * Math.sin(stepAngle) / latKmRatio);
         const wpLng = lng + (distJitter * Math.cos(stepAngle) / lngKmRatio);
         
         waypoints.push({ lat: wpLat, lng: wpLng });
       }
+
+      waypoints.push({ lat, lng });
+      return waypoints;
+    }
 
       // 3. Return cleanly back to origin
       waypoints.push({ lat, lng });
