@@ -1,3 +1,8 @@
+Ok everything is working well let’s make it better 
+Here are the rules I will put the code that is working right now assign number to each line and every time a line needs to be modified you tell me the code and what line  number so it makes it easier to work with 
+
+Here is the code 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -316,11 +321,12 @@
       // Add Zoom Control at top right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Use CartoDB Dark Matter tile layer for slick dark UI
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd'
-      }).addTo(map);
+      // Use CartoDB Dark Matter tile layer for slick dark 
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+     }).addTo(map);
+
 
       // Layer for polylines
       polylineGroup.addTo(map);
@@ -754,3 +760,6 @@ ${trkpts}
   </script>
 </body>
 </html>
+
+757 lines 
+651 loc
