@@ -552,11 +552,49 @@
       showToast(`Generated ${fetchedRoutes.length} loop options`, "fa-circle-check");
     }
 
-    // Helper: Generate circular waypoint coordinates around origin
+// Helper: Generate circular waypoint coordinates designed to avoid backtracking and urban sprawl
     function generateCircleWaypoints(lat, lng, totalTargetKm, headingDir, variantOffset) {
-      // Radius approximation: circumference = 2 * pi * r => r = target / (2 * pi)
-      // We scale radius down slightly because actual roads zigzag, increasing total distance
-      const radiusKm = (totalTargetKm / (2 * Math.PI)) * 0.75;
+      // Expand radius slightly and ensure a minimum size to stay out of tight neighborhoods
+      const radiusKm = Math.max(8, (totalTargetKm / (2 * Math.PI)) * 0.85);
+      
+      const latKmRatio = 111.0;
+      const lngKmRatio = 111.0 * Math.cos(lat * Math.PI / 180);
+
+      let baseAngle = 0;
+      if (headingDir === 'N') baseAngle = Math.PI / 2;
+      else if (headingDir === 'E') baseAngle = 0;
+      else if (headingDir === 'S') baseAngle = (3 * Math.PI) / 2;
+      else if (headingDir === 'W') baseAngle = Math.PI;
+      else baseAngle = (variantOffset * (2 * Math.PI / 3)) + (Math.random() * 0.5);
+
+      baseAngle += (variantOffset * 0.7);
+
+      const waypoints = [];
+
+      // 1. Initial outward push waypoint to clear local neighborhood/suburban congestion immediately
+      const initialPushDist = Math.min(radiusKm * 0.45, 15);
+      const pushLat = lat + (initialPushDist * Math.sin(baseAngle) / latKmRatio);
+      const pushLng = lng + (initialPushDist * Math.cos(baseAngle) / lngKmRatio);
+      waypoints.push({ lat: pushLat, lng: pushLng });
+
+      // 2. Generate 3 wide loop perimeter waypoints to form a sweeping, non-overlapping circuit
+      const numPoints = 3;
+      for (let i = 0; i < numPoints; i++) {
+        // Offset angles to ensure wide separation and prevent overlapping return paths
+        const stepAngle = baseAngle + ((i + 1) * (2 * Math.PI / numPoints));
+        const distJitter = radiusKm * (0.95 + (Math.random() * 0.15));
+        
+        const wpLat = lat + (distJitter * Math.sin(stepAngle) / latKmRatio);
+        const wpLng = lng + (distJitter * Math.cos(stepAngle) / lngKmRatio);
+        
+        waypoints.push({ lat: wpLat, lng: wpLng });
+      }
+
+      // 3. Return cleanly back to origin
+      waypoints.push({ lat, lng });
+
+      return waypoints;
+    }
       
       // Conversion approx: 1 degree lat ~ 111 km, 1 degree lng ~ 111 * cos(lat) km
       const latKmRatio = 111.0;
